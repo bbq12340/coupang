@@ -1,7 +1,9 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from tkinter.ttk import Progressbar
-from scrapeItems import ItemScraper
+from scrapeItems import CoupangScraper
+from threading import Thread, Event
+import pandas as pd
 import time
 
 class Application(tk.Frame):
@@ -9,6 +11,8 @@ class Application(tk.Frame):
         super().__init__(master)
         self.master = master
         self.pack()
+        self.thread = None
+        self.stop_thread = Event()
         self.delay_time = tk.DoubleVar()
         self.min = tk.IntVar()
         self.max = tk.IntVar()
@@ -48,23 +52,58 @@ class Application(tk.Frame):
         self.search_btn.grid(row=4, column=0, pady=5)
 
         self.start_btn = tk.Button(self, text="시작", command=self.start)
-        self.start_btn.grid(row=4, column=1, pady=5)
+        self.start_btn.grid(row=4, column=1, pady=5, sticky=tk.W)
+
+        self.end_btn = tk.Button(self, text="중지", command=self.stop)
+        self.end_btn.grid(row=4, column=1, pady=5, sticky=tk.E)
     
     def add_file(self):
         filename = filedialog.askopenfilename(initialdir='./list', title='파일 탐색', filetypes=[("text files", "*.txt")])
         self.filename_label.config(text=f"{filename.split('/')[-1]}")
         self.FILENAME = filename
-
+    
     def start(self):
-        app = ItemScraper()
+        self.stop_thread.clear()
+        self.thread = Thread(target=self.scraping)
+        self.thread.start()
+
+    def stop(self):
+        self.stop_thread.set()
+        self.thread.join()
+        self.thread = None
+        messagebox.showinfo("info", message="프로그램을 종료하였습니다.")
+        self.progress["value"] = 0
+    
+    def scraping(self):
+        app = CoupangScraper()
         with open(self.FILENAME, 'r') as f:
             request_list = f.readlines()
+        pbar_length = len(request_list)*(self.max.get()-self.min.get()+1)
         for q in request_list:
             q = q.replace('\n','')
             for p in range(self.min.get(), self.max.get()+1):
                 links=app.query(q, p)
+                if links==None:
+                    break
                 time.sleep(self.delay_time.get())
-                print(links)
+                for l in links:
+                    self.seller_scrape(app, q, l)
+                    self.progress["value"] += 100/(pbar_length*len(links))
+                    self.master.update_idletasks()
+                if self.stop_thread.is_set():
+                    return
+            # self.progress["value"] += 100/len(request_list)
+            # self.master.update_idletasks()
+        self.progress["value"] = 0
+        messagebox.showinfo("Info", message="크롤링 완료!")
+        return
+    
+    def seller_scrape(self, app, q, link):
+        c1 = link.split('?')[0].split('/')[-1]
+        c2 = link.split('itemId=')[-1].split('&')[0]
+        c3 = link.split('vendorItemId=')[-1].split('&')[0]
+        df = app.scrape_seller(q, c1, c2, c3)
+        df.to_csv("result.csv", mode="a", index=False, encoding='utf-8-sig', header=False)
         return
     
 
