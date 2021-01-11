@@ -3,8 +3,13 @@ from tkinter import filedialog, messagebox
 from tkinter.ttk import Progressbar
 from scrapeItems import CoupangScraper
 from threading import Thread, Event
+from tenacity import retry, wait, stop, before
 import pandas as pd
-import time
+import time, logging, sys
+
+
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -12,6 +17,7 @@ class Application(tk.Frame):
         self.master = master
         self.pack()
         self.thread = None
+        #variable
         self.stop_thread = Event()
         self.output = tk.StringVar()
         self.delay_time = tk.DoubleVar()
@@ -90,8 +96,6 @@ class Application(tk.Frame):
         with open(self.FILENAME, 'r') as f:
             request_list = f.readlines()
         for q in request_list:
-            if self.stop_thread.is_set():
-                break
             self.progress["value"] = 0
             self.progress_label.config(text=f"{request_list.index(q)+1}/{len(request_list)}")
             q = q.replace('\n','')
@@ -109,7 +113,8 @@ class Application(tk.Frame):
         self.progress["value"] = 0
         messagebox.showinfo("Info", message="크롤링 완료!")
         return
-    
+
+    @retry(wait=wait.wait_random(min=60*10, max=60*15), stop=stop.stop_after_attempt(3), before=before.before_log(logger, logging.DEBUG))
     def seller_scrape(self, app, q, link):
         c1 = link.split('?')[0].split('/')[-1]
         c2 = link.split('itemId=')[-1].split('&')[0]
