@@ -114,14 +114,15 @@ class Application(tk.Frame):
         messagebox.showinfo("Info", message="크롤링 완료!")
         return
 
-    @retry(wait=wait.wait_random(min=60*10, max=60*15), stop=stop.stop_after_attempt(3), before=before.before_log(logger, logging.DEBUG))
     def seller_scrape(self, app, q, link):
         c1 = link.split('?')[0].split('/')[-1]
         c2 = link.split('itemId=')[-1].split('&')[0]
         c3 = link.split('vendorItemId=')[-1].split('&')[0]
-        df = app.scrape_seller(q, c1, c2, c3)
-        df.to_csv(f"{self.output.get()}.csv", mode="a", index=False, encoding='utf-8-sig', header=False)
-        return
+        try:
+            df = app.scrape_seller(q, c1, c2, c3)
+            df.to_csv(f"{self.output.get()}.csv", mode="a", index=False, encoding='utf-8-sig', header=False)
+        except:
+            return
     
 
 root = tk.Tk()
